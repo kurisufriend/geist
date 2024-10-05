@@ -5,5 +5,7 @@
     "irc_channel":      "#geist",
 
     "geist_hostname":   "geist.silly.computer",
-    "ws_port":          8081
+    "ws_port":          8081,
+
+    "backlog_json_path":"./backlog.json"
 }

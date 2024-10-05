@@ -1,4 +1,4 @@
-import websockets, json, threading, asyncio
+import websockets, json, threading, asyncio, time
 from random import choice
 from ircked.bot import irc_bot
 from ircked.message import *
@@ -33,9 +33,6 @@ class geist():
                 print("unhandled IRC message:", str(msg))
         threading.Thread(target=self.bot.run, args=(irc_handler,)).start()
         await self.ws_run()
-    
-    def handle_irc_msg(self, author, body):
-        pass
 
     # woo woo woo woo stayin' alive
     def irc_ping(self, msg, ctx):
@@ -106,13 +103,14 @@ class geist():
         pm = privmsg.parse(msg)
         if pm.bod == ";info":
             self.bot.sendraw(privmsg.build(ctx.nick, pm.to, "geist running on"+self.config["geist_hostname"]).msg)
-
+        else:
+            self.ws_imsg(pm)
     async def ws_run(self):
         async def ws_handler(ws):
             while True:
                 try: msg = await ws.recv()
                 except websockets.ConnectionClosedOK:
-                    self.ws_closedconn(ws)
+                    await self.ws_closedconn(ws)
                     break
 
                 j = self._helper_verify_ws_msg(msg)
@@ -141,10 +139,10 @@ class geist():
             await asyncio.get_running_loop().create_future()
         asyncio.get_event_loop().create_task(self.ws_churn_bus)
 
-    def ws_closedconn(self, ws):
+    async def ws_closedconn(self, ws):
         # remove the client from the users, then update the user list
         self.geist_users.pop(ws.remote_address)
-        ws_gusers()
+        await self.ws_gusers()
 
     # send everyone a gusers update
     async def ws_gusers(self):
@@ -168,6 +166,7 @@ class geist():
             await self._helper_ws_sendall(
                 self._helper_ws_msg("imsg", {"author": author, "contents": contents})
             )
+        self._helper_append_backlog("imsg", author, contents)
     
     # client introduction (p much just nick registration)
     async def wsh_hi(self, ws, j):
@@ -178,11 +177,17 @@ class geist():
             await ws.close(1002, err)
             return
         self.geist_users[ws.remote_address] = (ws, j["data"]["nick"])
+        await self.ws_gusers()
+        with open(self.config["backlog_json_path"], "r") as f:
+            blj = json.loads(f.read())
         ws.send(
             self._helper_ws_msg("orientation",
-                { # TODO
-                    "backlog": "",
-                    "channel": self.config["irc_channel"]
+                {
+                    "backlog":  blj,
+                    "channel":  self.config["irc_channel"],
+                    "topic":    self.topic,
+                    "iusers":   list(self.iirc_users),
+                    "gusers":   [self.geist_users[k][1] for k in self.geist_users.keys()]
                 }
             )
         )
@@ -196,6 +201,7 @@ class geist():
         )
 
         self.bot.sendraw(pm.msg)
+        self._helper_append_backlog("gmsg", j["data"]["author", j["data"]["contents"]])
 
     # loop forever, calling functions from the message bus
     async def ws_churn_bus(self):
@@ -234,8 +240,21 @@ class geist():
     def _helper_ws_msg(self, type, data):
         return json.dumps({"type": type, "data": data})
 
+    # send a message to all connected users
     async def _helper_ws_sendall(self, msg):
         for k in self.geist_users.keys():
             conn = self.geist_users[k][0]
             await conn.send(msg)
     
+    # append message to the backlog.
+    def _helper_append_backlog(self, type, author, contents):
+        with open(self.config["backlog_json_path"], "r") as f:
+            j = json.loads(f.read())
+        j.append(
+            {"type": type, "data": {"author": author, "contents": contents, "time": int(time.time())}}
+        )
+        # only save the last 100 messages. for perf and ephemerality reasons.
+        if len(j) > 100:
+            j = j[-100:]
+        with open(self.config["backlog_json_path"], "w") as f:
+            f.write(json.dumps(j))

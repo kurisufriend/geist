@@ -12,6 +12,8 @@ goal: a web chat (websockets) that mirrors an IRC, with historical backlogs.
         it, the last ~100 chats, whatever on page load. probably cache that,
         at some point, or don't if we don't need to.
         practicals:
+
+            IGNORE:
             if we store IRC logs, we won't be able to replicate offhand geist
             messages as such. they'd be backlogged as messages from 
             geist (IRC). actually, silly me, they wouldn't be backlogged at
@@ -21,6 +23,11 @@ goal: a web chat (websockets) that mirrors an IRC, with historical backlogs.
             protocol format (e.g. GEISTPM instead of PRIVMSG), or we could
             make a custom logging format. the first one is better, KISS.
 
+            the backlog is a .json that stores a list of imsg and gmsg objects.
+            try to out-KISS THAT. graft a 'time' field into the data part
+            of the object w/ a unix timestamp. 
+
+            CEASE IGNORANCE:
             the cache thing might be silly. the chat will be slow if we make
             it totally stateless like that. it's elegant, but impractical.
             we'll see.
@@ -78,9 +85,29 @@ goal: a web chat (websockets) that mirrors an IRC, with historical backlogs.
             user join: join them to the list, SEND ERRYONE TYPEIUSERS TO WS
             user part: remove them from the list, SEND ERRYONE TYPEIUSERS TO WS
             privmsg: SEND ERRYONE TYPEIMSG TO WS
+                for backlog:
+                    save message
+                for push notifs:
+                    if .tell <user>, add w/ timestamp to ping queue
         ws:
             onjoin: do jack shit for now lol don't wanna annoy the IRC ppl w infinite
                     remote joinparts from bots or shy people on mobile data or w/e
             user msg: send a reflective message to IRC
+                for backlog:
+                    save message. use nonsense for the ident and GEISTPM as the command
+                for push notifs:
+                    if /tell <user>, add w/ timestamp to ping queue if they're geist-based,
+                    pass on to wadsworth (or do our own .tell system) if they ain't
+                    AND DON'T REFLECT IT !!!!!!!!!!!!!!!!! (or maybe do if it's g->i)
             user joins/leaves: send gusers update over ws
             literally anything else: do JACK FUCKING SHIT 
+
+    HOW TO MAKE THIS BETTER:
+        webIRC. implement WebIRC. WebIRC would solve al my problems and yours. need to ask in
+        #oftc how to go about this.
+
+        push notifs. how: add .tell esuqe command to geist that sends a notification to the 
+        right places. use react native or something for the FE so it can be an app, then tack
+        on to-device notifications for nicks. (this can ig just be a timestamped queue of pings
+        accessible via http or whatever. so we might actually need to serve some http. bleh.)
+        include a .tell @everyone equivalent for sending out meeting reminders ^.^
