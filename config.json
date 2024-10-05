@@ -1,0 +1,6 @@
+{
+    "irc_server":   "irc.oftc.net",
+    "irc_port":     6667,
+    "irc_nick":     "g",
+    "irc_channel":  "#geist"
+}
