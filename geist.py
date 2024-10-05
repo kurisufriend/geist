@@ -67,6 +67,9 @@ class geist():
             self.topic = " ".join(ps)
         else:
             self.topic = ""
+        
+        # update itopic
+        self._helper_buscall(self.ws_itopic, ())
     
     # when someone else sets a topic. same fmt as 332 p much, so call that.
     def irc_topic(self, msg, ctx):
@@ -144,6 +147,12 @@ class geist():
         # remove the client from the users, then update the user list
         self.geist_users.pop(ws.remote_address)
         await self.ws_gusers()
+
+    # send everyone a topic update
+    async def ws_itopic(self):
+        await self._helper_ws_sendall(
+            self._helper_ws_msg("itopic", {"topic": self.topic})
+        )
 
     # send everyone a gusers update
     async def ws_gusers(self):

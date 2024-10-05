@@ -76,6 +76,7 @@ goal: a web chat (websockets) that mirrors an IRC, with historical backlogs.
                     "iusers":   [...list of all the iusers...],
                     "gusers":   [...list of all the gusers...]}}
                 {"type": "error", "data": {"reason": "you suck"}}   < error reporting
+                {"type": "itopic", "data": {"topic": "v to the t to the l u u g"}}  < topic update
     
     triggers:
         irc:
@@ -89,6 +90,8 @@ goal: a web chat (websockets) that mirrors an IRC, with historical backlogs.
                     save message
                 for push notifs:
                     if .tell <user>, add w/ timestamp to ping queue
+            topic change:
+                send erryone TYPEITOPIC
         ws:
             onjoin: do jack shit for now lol don't wanna annoy the IRC ppl w infinite
                     remote joinparts from bots or shy people on mobile data or w/e
