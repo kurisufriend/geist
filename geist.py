@@ -91,22 +91,22 @@ class geist():
                 j = self._helper_verify_ws_msg(msg)
                 # if j is a str, the deserialization errored out. tell the client!
                 if type(j) == str:
-                    ws.send(self._helper_ws_msg("error", j))
-                    ws.close(1002, j)
+                    await ws.send(self._helper_ws_msg("error", j))
+                    await ws.close(1002, j)
                     return
                 
                 if self.geist_users.get(ws.remote_address) == None and j["type"] != "hi":
-                    ws.send(self._helper_ws_msg("error", "first send a hi message"))
+                    await ws.send(self._helper_ws_msg("error", "first send a hi message"))
                     continue
 
                 # at this point we're sure it's a properly formed message
                 handler = getattr(self, "wsh_"+j["type"], None)
-                try: handler(ws, j)
+                try: await handler(ws, j)
                 except TypeError:
                     print("unhandled ws message:", msg)
                 except:
-                    ws.send(self._helper_ws_msg("error", "error while processing command"+msg))
-                    ws.close(1002)
+                    await ws.send(self._helper_ws_msg("error", "error while processing command"+msg))
+                    await ws.close(1002)
                     return
 
                 print(msg)
@@ -126,17 +126,17 @@ class geist():
         )
     
     # client introduction (p much just nick registration)
-    def wsh_hi(self, ws, j):
+    async def wsh_hi(self, ws, j):
         users = [self.geist_users[k][1] for k in self.geist_users.keys()]
         if j["data"]["nick"] in users:
             err = "nick already in use"
-            ws.send(self._helper_ws_msg("error", err))
-            ws.close(1002, err)
+            await ws.send(self._helper_ws_msg("error", err))
+            await ws.close(1002, err)
             return
         self.geist_users[ws.remote_address] = (ws, j["data"]["nick"])
     
     # mirror geist messages to IRC
-    def wsh_gmsg(self, ws, j):
+    async def wsh_gmsg(self, ws, j):
         pm = privmsg.build(
             self.config["irc_nick"], 
             self.config["irc_channel"], 
@@ -170,8 +170,8 @@ class geist():
     def _helper_ws_msg(self, type, data):
         return json.dumps({"type": type, "data": data})
 
-    def _helper_ws_sendall(self, msg):
+    async def _helper_ws_sendall(self, msg):
         for k in self.geist_users.keys():
             conn = self.geist_users[k][0]
-            conn.send(msg)
+            await conn.send(msg)
     
