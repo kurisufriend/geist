@@ -95,16 +95,17 @@ class geist():
 
     def irc_privmsg(self, msg, ctx):
         # we're being queried by aliens. assume a suitable disguise.
-        if "\x01VERSION\x01" in msg.parameters:
+        if "\x01VERSION\x01" in msg.parameters or "\u0001VERSION\u0001" in msg.parameters:
             self.bot.sendraw(message.manual(":"+msg.parameters[0], "PRIVMSG", [msg.prefix[1:].split("!")[0], ":\x01dorfl/geist\x01"]))
             return
         
         # we got a message!!!!
         pm = privmsg.parse(msg)
+        if pm.to != self.config["irc_channel"]: return
         if pm.bod == ";info":
             self.bot.sendraw(privmsg.build(ctx.nick, pm.to, "geist running on"+self.config["geist_hostname"]).msg)
         else:
-            self.ws_imsg(pm)
+            self._helper_buscall(self.ws_imsg, (pm,))
     async def ws_run(self):
         async def ws_handler(ws):
             while True:
@@ -135,9 +136,9 @@ class geist():
                     return
 
                 print(msg)
+        asyncio.get_event_loop().create_task(self.ws_churn_bus())
         async with websockets.serve(ws_handler, "", self.config["ws_port"]):
             await asyncio.get_running_loop().create_future()
-        asyncio.get_event_loop().create_task(self.ws_churn_bus)
 
     async def ws_closedconn(self, ws):
         # remove the client from the users, then update the user list
@@ -209,8 +210,9 @@ class geist():
             for m in self.ws_bus:
                 function = m[0]
                 args = m[1] # should be an unpackable tuple
-                function(*args)
-            asyncio.sleep(1)
+                await function(*args)
+            self.ws_bus = []
+            await asyncio.sleep(1)
 
     # add function to ws_bus
     #  takes function reference and tuple args
