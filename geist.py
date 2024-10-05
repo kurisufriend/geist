@@ -39,19 +39,34 @@ class geist():
     
     # reply to NAMES, params are a list of all the names
     def irc_353(self, msg, ctx):
-        # get rid of the leading colon
-        names = msg.parameters
-        names[0] = names[1:]
+        # get rid of the leading colon & meta stuff
+        names = self._helper_trim_param_errata(msg.parameters)
+        names[0] = names[0][1:]
         # filter out ops of all sorts and voices
         #  some ircds probably have more goofy role symbols but i frankly don't care
-        names = [i.replace("@", "").replace("+", "").replace("%", "").replace("&", "") for i in names if i]
+        for i in range(len(names)):
+            for r in ["@", "+", "%", "&", "~"]:
+                names[i] = names[i].replace(r, "")
         # add all these guys to our set
         for n in names:
             self.irc_users.add(n)
 
-    # unless we go sajoined somewhere, this is us joining the desired channel. take names!
     def irc_join(self, msg, ctx):
-        self.bot.socket.send(f"NAMES {msg.parameters[0][1:]}\r\n".encode("utf-8"))
+        # the nick that joined
+        nick = msg.prefix[1:].split("!")[0]
+        # us joining the desired channel. take names!
+        if nick == self.config["irc_nick"]:
+            self.irc_users = set()
+            self.bot.socket.send(f"NAMES {msg.parameters[0][1:]}\r\n".encode("utf-8"))
+            return
+        # otherwise, add the newbie
+        self.irc_users.add(nick)
+        
+    def irc_part(self, msg, ctx):
+        # the nick that left
+        nick = msg.prefix[1:].split("!")[0]
+        # bye bye
+        self.irc_users.remove(nick)
 
     def irc_privmsg(self, msg, ctx):
         # we're being queried by aliens. assume a suitable disguise.
@@ -64,3 +79,11 @@ class geist():
         if pm.bod == ".hello":
             self.bot.sendraw(privmsg.build(ctx.nick, pm.to, "hello, world!").msg)
 
+    # sometimes messages have random bullshit we don't want before the first colon-param
+    def _helper_trim_param_errata(self, params):
+        res = []
+        flip = False
+        for i in params:
+            if i.startswith(":"): flip = True
+            if flip: res.append(i)
+        return res
