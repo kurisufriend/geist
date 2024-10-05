@@ -53,30 +53,34 @@ goal: a web chat (websockets) that mirrors an IRC, with historical backlogs.
     spec:
         websockets:
             client-sending:
-                {"type": "hi", "data": {}}  <   client sends after conn, serb responds w/
+                {"type": "hi", "data": {"nick": "cynic"}}  <   client sends after conn, serb responds w/
                                                 init package
                 {"type": "gmsg", "data":    <   geist -> irc message
                     {"author": "cynic", "contents": "yo"}}
             server-sending:
                 {"type": "imsg", "data":    <   irc->geist message
                     {"author": "cynic", "contents": "yo"}}
-                {"type": "users", "data": {"who": ["emachine", echarlie]}}   < current irc user list
+                {"type": "iusers", "data": {"who": ["emachine", echarlie]}}   < current irc user list
+                {"type": "gusers", "data": {"who": ["ianc", botjoe]}}   < current geist user list
                 {"type": "orientation", "data":{    < the init package
                     "backlog":  [...array of (i|g)msg objects...],
                     "channel":  "#vtluug",
                     "topic":    "hokietux worldwide",
-                    "users":    [...list of all the users...]}}
+                    "iusers":   [...list of all the iusers...],
+                    "gusers":   [...list of all the gusers...]}}
+                {"type": "error", "data": {"reason": "you suck"}}   < error reporting
     
     triggers:
         irc:
             onjoin: get NAMES, purge the local user list, and join everyone we find
                     TL Note: when i say 'user list', i do literally mean a [l, i , s, t].
                              we're just .append()ing here, folks. not that hard.
-            user join: join them to the list, SEND ERRYONE TYPEUSERS TO WS
-            user part: remove them from the list, SEND ERRYONE TYPEUSERS TO WS
+            user join: join them to the list, SEND ERRYONE TYPEIUSERS TO WS
+            user part: remove them from the list, SEND ERRYONE TYPEIUSERS TO WS
             privmsg: SEND ERRYONE TYPEIMSG TO WS
         ws:
             onjoin: do jack shit for now lol don't wanna annoy the IRC ppl w infinite
                     remote joinparts from bots or shy people on mobile data or w/e
             user msg: send a reflective message to IRC
+            user joins/leaves: send gusers update over ws
             literally anything else: do JACK FUCKING SHIT 
