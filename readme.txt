@@ -67,3 +67,17 @@ goal: a web chat (websockets) that mirrors an IRC, with historical backlogs.
                     "channel":  "#vtluug",
                     "topic":    "hokietux worldwide",
                     "users":    [...array of join msg objects...]}}
+    
+    triggers:
+        irc:
+            onjoin: get NAMES, purge the local user list, and join everyone we find
+                    TL Note: when i say 'user list', i do literally mean a [l, i , s, t].
+                             we're just .append()ing here, folks. not that hard.
+            user join: join them to the list, SEND ERRYONE TYPEJOIN TO WS
+            user part: remove them from the list, SEND ERRYONE TYPEPART TO WS
+            privmsg: SEND ERRYONE TYPEIMSG TO WS
+        ws:
+            onjoin: do jack shit for now lol don't wanna annoy the IRC ppl w infinite
+                    remote joinparts from bots or shy people on mobile data or w/e
+            user msg: send a reflective message to IRC
+            literally anything else: do JACK FUCKING SHIT 
