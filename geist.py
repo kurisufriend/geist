@@ -5,7 +5,7 @@ from ircked.message import *
 
 class geist():
     def __init__(self, config_path = "./config.json"):
-        self.irc_users = []
+        self.irc_users = set()
         self.geist_users = {}
 
         with open(config_path, "r") as f:
@@ -36,6 +36,22 @@ class geist():
     # 001 is basically ON_READY. join up w the squad.
     def irc_001(self, msg, ctx):
         self.bot.sendraw(message.manual("", "JOIN", [self.config["irc_channel"]]))
+    
+    # reply to NAMES, params are a list of all the names
+    def irc_353(self, msg, ctx):
+        # get rid of the leading colon
+        names = msg.parameters
+        names[0] = names[1:]
+        # filter out ops of all sorts and voices
+        #  some ircds probably have more goofy role symbols but i frankly don't care
+        names = [i.replace("@", "").replace("+", "").replace("%", "").replace("&", "") for i in names if i]
+        # add all these guys to our set
+        for n in names:
+            self.irc_users.add(n)
+
+    # unless we go sajoined somewhere, this is us joining the desired channel. take names!
+    def irc_join(self, msg, ctx):
+        self.bot.socket.send(f"NAMES {msg.parameters[0][1:]}\r\n".encode("utf-8"))
 
     def irc_privmsg(self, msg, ctx):
         # we're being queried by aliens. assume a suitable disguise.

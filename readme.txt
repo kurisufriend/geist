@@ -60,21 +60,20 @@ goal: a web chat (websockets) that mirrors an IRC, with historical backlogs.
             server-sending:
                 {"type": "imsg", "data":    <   irc->geist message
                     {"author": "cynic", "contents": "yo"}}
-                {"type": "join", "data": {"who": "emachine"}}   < user joined irc
-                {"type": "part", "data": {"who": "echarlie"}}   < user left irc
+                {"type": "users", "data": {"who": ["emachine", echarlie]}}   < current irc user list
                 {"type": "orientation", "data":{    < the init package
                     "backlog":  [...array of (i|g)msg objects...],
                     "channel":  "#vtluug",
                     "topic":    "hokietux worldwide",
-                    "users":    [...array of join msg objects...]}}
+                    "users":    [...list of all the users...]}}
     
     triggers:
         irc:
             onjoin: get NAMES, purge the local user list, and join everyone we find
                     TL Note: when i say 'user list', i do literally mean a [l, i , s, t].
                              we're just .append()ing here, folks. not that hard.
-            user join: join them to the list, SEND ERRYONE TYPEJOIN TO WS
-            user part: remove them from the list, SEND ERRYONE TYPEPART TO WS
+            user join: join them to the list, SEND ERRYONE TYPEUSERS TO WS
+            user part: remove them from the list, SEND ERRYONE TYPEUSERS TO WS
             privmsg: SEND ERRYONE TYPEIMSG TO WS
         ws:
             onjoin: do jack shit for now lol don't wanna annoy the IRC ppl w infinite
