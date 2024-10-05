@@ -5,9 +5,16 @@ from ircked.message import *
 
 class geist():
     def __init__(self, config_path = "./config.json"):
-        self.irc_users = set()
+        # prevent namecollides with a hypothetical USERS message handler
+        self.iirc_users = set()
+        self.topic = ""
+
         # maps remote_address -> (connection, nick)
         self.geist_users = {}
+
+        # message bus for calling async functions from non-async ones.
+        #  fmt: [(function, (args,))]
+        self.ws_bus = []
 
         with open(config_path, "r") as f:
             self.config = json.loads(f.read())
@@ -50,24 +57,44 @@ class geist():
                 names[i] = names[i].replace(r, "")
         # add all these guys to our set
         for n in names:
-            self.irc_users.add(n)
+            self.iirc_users.add(n)
+    
+    # end of NAMES. catch it and pass so it doesn't pollute the console.
+    def irc_366(self, msg, ctx): pass
+
+    # reply to TOPIC, the topic is the param list
+    def irc_332(self, msg, ctx):
+        ps = self._helper_trim_param_errata(msg.parameters)
+        if len(ps) > 0:
+            ps[0] = ps[0][1:]
+            self.topic = " ".join(ps)
+        else:
+            self.topic = ""
+    
+    # when someone else sets a topic. same fmt as 332 p much, so call that.
+    def irc_topic(self, msg, ctx):
+        self.irc_332(msg, ctx)
 
     def irc_join(self, msg, ctx):
         # the nick that joined
         nick = msg.prefix[1:].split("!")[0]
         # us joining the desired channel. take names!
         if nick == self.config["irc_nick"]:
-            self.irc_users = set()
+            self.iirc_users = set()
             self.bot.socket.send(f"NAMES {msg.parameters[0][1:]}\r\n".encode("utf-8"))
-            return
-        # otherwise, add the newbie
-        self.irc_users.add(nick)
+        else:
+            # otherwise, add the newbie
+            self.iirc_users.add(nick)
+        # update iusers
+        self._helper_buscall(self.ws_iusers, ())
         
     def irc_part(self, msg, ctx):
         # the nick that left
         nick = msg.prefix[1:].split("!")[0]
         # bye bye
-        self.irc_users.remove(nick)
+        self.iirc_users.remove(nick)
+        # update iusers
+        self._helper_buscall(self.ws_isusers, ())
 
     def irc_privmsg(self, msg, ctx):
         # we're being queried by aliens. assume a suitable disguise.
@@ -112,6 +139,7 @@ class geist():
                 print(msg)
         async with websockets.serve(ws_handler, "", self.config["ws_port"]):
             await asyncio.get_running_loop().create_future()
+        asyncio.get_event_loop().create_task(self.ws_churn_bus)
 
     def ws_closedconn(self, ws):
         # remove the client from the users, then update the user list
@@ -119,11 +147,27 @@ class geist():
         ws_gusers()
 
     # send everyone a gusers update
-    def ws_gusers(self):
+    async def ws_gusers(self):
         users = [self.geist_users[k][1] for k in self.geist_users.keys()]
-        self._helper_ws_sendall(
+        await self._helper_ws_sendall(
             self._helper_ws_msg("gusers", {"who": users})
         )
+    
+    # send everyone an iusers update
+    async def ws_iusers(self):
+        users = list(self.iirc_users)
+        await self._helper_ws_sendall(
+            self._helper_ws_msg("iusers", {"who": users})
+        )
+    
+    # send everyone an imsg (unless we sent it)
+    async def ws_imsg(self, irc_pm):
+        contents = irc_pm.bod
+        author = irc_pm.fr.split("!")[0]
+        if author != self.config["irc_nick"]:
+            await self._helper_ws_sendall(
+                self._helper_ws_msg("imsg", {"author": author, "contents": contents})
+            )
     
     # client introduction (p much just nick registration)
     async def wsh_hi(self, ws, j):
@@ -134,6 +178,14 @@ class geist():
             await ws.close(1002, err)
             return
         self.geist_users[ws.remote_address] = (ws, j["data"]["nick"])
+        ws.send(
+            self._helper_ws_msg("orientation",
+                { # TODO
+                    "backlog": "",
+                    "channel": self.config["irc_channel"]
+                }
+            )
+        )
     
     # mirror geist messages to IRC
     async def wsh_gmsg(self, ws, j):
@@ -145,7 +197,19 @@ class geist():
 
         self.bot.sendraw(pm.msg)
 
+    # loop forever, calling functions from the message bus
+    async def ws_churn_bus(self):
+        while True:
+            for m in self.ws_bus:
+                function = m[0]
+                args = m[1] # should be an unpackable tuple
+                function(*args)
+            asyncio.sleep(1)
 
+    # add function to ws_bus
+    #  takes function reference and tuple args
+    def _helper_buscall(self, function, args):
+        self.ws_bus.append((function, args))
 
     # sometimes messages have random bullshit we don't want before the first colon-param
     def _helper_trim_param_errata(self, params):
