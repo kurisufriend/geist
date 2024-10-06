@@ -63,10 +63,12 @@ goal: a web chat (websockets) that mirrors an IRC, with historical backlogs.
                 {"type": "hi", "data": {"nick": "cynic"}}  <   client sends after conn, serb responds w/
                                                 init package
                 {"type": "gmsg", "data":    <   geist -> irc message
-                    {"author": "cynic", "contents": "yo"}}
+                    {"contents": "yo"}}
             server-sending:
                 {"type": "imsg", "data":    <   irc->geist message
                     {"author": "cynic", "contents": "yo"}}
+                {"type": "gmsg", "data":    <   geist->geist message
+                    {"author": "botjoe", "contents": "yo"}}
                 {"type": "iusers", "data": {"who": ["emachine", echarlie]}}   < current irc user list
                 {"type": "gusers", "data": {"who": ["ianc", botjoe]}}   < current geist user list
                 {"type": "orientation", "data":{    < the init package

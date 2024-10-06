@@ -121,8 +121,7 @@ class geist():
                 # if j is a str, the deserialization errored out. tell the client!
                 if type(j) == str:
                     await ws.send(self._helper_ws_msg("error", j))
-                    await ws.close(1002, j)
-                    return
+                    continue
                 
                 if self.geist_users.get(ws.remote_address) == None and j["type"] != "hi":
                     await ws.send(self._helper_ws_msg("error", "first send a hi message"))
@@ -133,9 +132,11 @@ class geist():
                 try: await handler(ws, j)
                 except TypeError:
                     print("unhandled ws message:", msg)
-                except:
-                    await ws.send(self._helper_ws_msg("error", "error while processing command"+msg))
+                except Exception as e:
+                    print("error while processing ws message", msg, e)
+                    await ws.send(self._helper_ws_msg("error", "error while processing command"+msg+e))
                     await ws.close(1002)
+                    await self.ws_closedconn(ws)
                     return
 
                 print(msg)
@@ -181,16 +182,17 @@ class geist():
     # client introduction (p much just nick registration)
     async def wsh_hi(self, ws, j):
         users = [self.geist_users[k][1] for k in self.geist_users.keys()]
-        if j["data"]["nick"] in users:
+        if j["data"]["nick"] in users or j["data"]["nick"] in self.iirc_users:
             err = "nick already in use"
             await ws.send(self._helper_ws_msg("error", err))
             await ws.close(1002, err)
             return
         self.geist_users[ws.remote_address] = (ws, j["data"]["nick"])
         await self.ws_gusers()
+        await self.ws_iusers()
         with open(self.config["backlog_json_path"], "r") as f:
             blj = json.loads(f.read())
-        ws.send(
+        await ws.send(
             self._helper_ws_msg("orientation",
                 {
                     "backlog":  blj,
@@ -204,14 +206,18 @@ class geist():
     
     # mirror geist messages to IRC
     async def wsh_gmsg(self, ws, j):
+        author = self.geist_users[ws.remote_address][1]
         pm = privmsg.build(
-            self.config["irc_nick"], 
+            author, 
             self.config["irc_channel"], 
-            f'<{j["data"]["author"]}> {j["data"]["contents"]}'
+            f'<{author}> {j["data"]["contents"]}'
         )
 
         self.bot.sendraw(pm.msg)
-        self._helper_append_backlog("gmsg", j["data"]["author", j["data"]["contents"]])
+        await self._helper_ws_sendall(
+            self._helper_ws_msg("gmsg", {"author": author, "contents": j["data"]["contents"]})
+        )
+        self._helper_append_backlog("gmsg", author, j["data"]["contents"])
 
     # loop forever, calling functions from the message bus
     async def ws_churn_bus(self):
