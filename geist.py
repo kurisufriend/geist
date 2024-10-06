@@ -190,6 +190,7 @@ class geist():
         self.geist_users[ws.remote_address] = (ws, j["data"]["nick"])
         await self.ws_gusers()
         await self.ws_iusers()
+        await self.ws_itopic()
         with open(self.config["backlog_json_path"], "r") as f:
             blj = json.loads(f.read())
         await ws.send(
